@@ -4,10 +4,14 @@ export type CreateTokenMetadata = {
   name: string;
   symbol: string;
   description: string;
-  file: Blob;
+  file?: Blob;
   twitter?: string;
   telegram?: string;
   website?: string;
+  showName?: boolean;
+  createdOn?: string;
+  /** If provided, SDK will skip upload and use this URI */
+  metadataUri?: string;
 };
 
 export type TokenMetadata = {

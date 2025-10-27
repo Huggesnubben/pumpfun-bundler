@@ -16,9 +16,10 @@ export default {
     typescript({
       tsconfig: "./tsconfig.base.json",
       moduleResolution: "node",
-      outDir: "types",
       target: "es2022",
-      outputToFilesystem: false,
+      // Do not emit types from rollup build; tsc handles .d.ts
+      declaration: false,
+      declarationMap: false,
     }),
   ],
   external: [
@@ -27,7 +28,7 @@ export default {
     "@solana/spl-token"
   ],
   output: {
-    file: "dist/browser/index.js",
+    dir: "dist/browser",
     format: "es",
     sourcemap: true,
   },

@@ -44,7 +44,8 @@ import {
   sendTx,
 } from "./util";
 import { PumpFun, IDL } from "./IDL";
-import { jitoWithAxios } from "./jitoWithAxios";
+// Jito integration is optional and not included in this repo. We'll keep a stub.
+// import { jitoWithAxios } from "./jitoWithAxios";
 
 const PROGRAM_ID = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
 const MPL_TOKEN_METADATA_PROGRAM_ID =
@@ -87,7 +88,6 @@ export class PumpFunSDK {
     );
 
     let newTx = new Transaction().add(createTx);
-    let buyTxs: VersionedTransaction[] = [];
 
     let createVersionedTx = await buildTx(
       this.connection,
@@ -98,27 +98,56 @@ export class PumpFunSDK {
       commitment,
       finality
     );
-    if (buyAmountSol > 0) {
+    // Send create transaction first
+    const createResult = await sendTx(
+      this.connection,
+      newTx,
+      creator.publicKey,
+      [creator, mint],
+      priorityFees,
+      commitment,
+      finality
+    );
+
+    const buyResults: Array<{ buyer: string; result: TransactionResult }> = [];
+
+    if (buyAmountSol > 0n) {
       for (let i = 0; i < buyers.length; i++) {
+        const buyerKeypair = buyers[i];
         const randomPercent = getRandomInt(10, 25);
-        const buyAmountSolWithRandom =
-          (buyAmountSol / BigInt(100)) *
+        const adjusted =
+          (buyAmountSol / 100n) *
           BigInt(randomPercent % 2 ? 100 + randomPercent : 100 - randomPercent);
 
-        const globalAccount = await this.getGlobalAccount(commitment);
- 
-        // This is building buy transaction code
-        // If you need it, contact me.
+        const buyTx = await this.getBuyInstructionsBySolAmount(
+          buyerKeypair.publicKey,
+          mint.publicKey,
+          adjusted,
+          slippageBasisPoints,
+          commitment
+        );
 
-        buyTxs.push(buyVersionedTx);
+        const result = await sendTx(
+          this.connection,
+          buyTx,
+          buyerKeypair.publicKey,
+          [buyerKeypair],
+          priorityFees,
+          commitment,
+          finality
+        );
+        buyResults.push({ buyer: buyerKeypair.publicKey.toBase58(), result });
       }
     }
-    let result;
-    
-    // This is jito bundling code.
-    // If you need it, contact me.
 
-    return result;
+    return {
+      success: createResult.success && buyResults.every(b => b.result.success),
+      signature: createResult.signature,
+      results: undefined,
+      // Non-standard fields included by example expectations
+      // jitoTxsignature: undefined,
+      // buys: buyResults,
+    } as unknown as TransactionResult;
   }
 
   async buy(
@@ -401,22 +430,23 @@ export class PumpFunSDK {
   }
 
   async createTokenMetadata(create: CreateTokenMetadata) {
-    let formData = new FormData();
-    formData.append("file", create.file),
-      formData.append("name", create.name),
-      formData.append("symbol", create.symbol),
-      formData.append("description", create.description),
-      formData.append("twitter", create.twitter || ""),
-      formData.append("telegram", create.telegram || ""),
-      formData.append("website", create.website || ""),
-      formData.append("showName", "true");
-
     setGlobalDispatcher(new Agent({ connect: { timeout: 60_000 } }));
-    
-    // This is upload metadata to pumpfun site code.
-    // If you need it, contact me.
 
-    return request.json();
+    // If metadataUri is provided, use it directly
+    if ((create as any).metadataUri) {
+      return { metadataUri: (create as any).metadataUri };
+    }
+
+    // Fallback to IPFS via Fleek if PAT/PROJECT_ID are set
+    try {
+      const { uploadMetadataToIPFS } = await import('./uploadToIpfs');
+      const uri = await uploadMetadataToIPFS(create);
+      return { metadataUri: uri } as any;
+    } catch (err) {
+      throw new Error(
+        'Metadata upload not configured. Provide metadataUri or set Fleek PAT/PROJECT_ID.'
+      );
+    }
   }
 
   //EVENTS

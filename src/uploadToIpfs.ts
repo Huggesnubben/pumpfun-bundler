@@ -1,59 +1,59 @@
-
-import fs from 'fs';
 import { FleekSdk, PersonalAccessTokenService } from '@fleekxyz/sdk';
 import dotenv from 'dotenv';
-import metadata from '../metadata';
+import { CreateTokenMetadata } from './types';
+
 dotenv.config();
 
 const pat = process.env.PAT || '';
 const project_id = process.env.PROJECT_ID || '';
-const imageName = "./upload/bolt.jpg";
-const metadataName = "./upload/metadata.json";
 
 const patService = new PersonalAccessTokenService({
   personalAccessToken: pat,
   projectId: project_id,
-})
+});
 
-const fleekSdk = new FleekSdk({ accessTokenService: patService })
+const fleekSdk = new FleekSdk({ accessTokenService: patService });
 
-async function uploadFileToIPFS(filename: string, content: Buffer) {
+async function uploadBufferToIPFS(pathName: string, content: Buffer) {
   const result = await fleekSdk.ipfs().add({
-    path: filename,
-    content: content
+    path: pathName,
+    content,
   });
   return result;
 }
 
-export const getUploadedMetadataURI = async (): Promise<string> => {
-  const fileContent = fs.readFileSync(imageName);
-
-  try {
-    const imageUploadResult = await uploadFileToIPFS(imageName, fileContent);
-    console.log('Image uploaded to IPFS:', imageUploadResult);
-    console.log('IPFS URL:', `https://cf-ipfs.com/ipfs/${imageUploadResult.cid}`);
-
-    const data = {
-      "name": metadata.name,
-      "symbol": metadata.symbol,
-      "description": metadata.description,
-      "image": `https://cf-ipfs.com/ipfs/${imageUploadResult.cid}`,
-      "showName": metadata.showName,
-      "createdOn": metadata.createdOn,
-      "twitter": metadata.twitter,
-      "telegram": metadata.telegram,
-      "website": metadata.website
-    }
-    const metadataString = JSON.stringify(data);
-    const bufferContent = Buffer.from(metadataString, 'utf-8');
-    fs.writeFileSync(metadataName, bufferContent);
-    const metadataContent = fs.readFileSync(metadataName);
-
-    const metadataUploadResult = await uploadFileToIPFS(metadataName, metadataContent);
-    console.log('File uploaded to IPFS:', metadataUploadResult);
-    console.log('IPFS URL:', `https://cf-ipfs.com/ipfs/${metadataUploadResult.cid}`)
-    return `https://cf-ipfs.com/ipfs/${metadataUploadResult.cid}`;
-  } catch (error) {
-    return "";
+export const uploadMetadataToIPFS = async (
+  create: CreateTokenMetadata
+): Promise<string> => {
+  if (!create.file) {
+    throw new Error('CreateTokenMetadata.file is required to upload to IPFS');
   }
-}
+
+  const fileArrayBuffer = await create.file.arrayBuffer();
+  const imageBuffer = Buffer.from(fileArrayBuffer);
+
+  const imageUploadResult = await uploadBufferToIPFS(
+    create.file instanceof File ? create.file.name : 'image.png',
+    imageBuffer
+  );
+
+  const metadataJson = {
+    name: create.name,
+    symbol: create.symbol,
+    description: create.description,
+    image: `https://cf-ipfs.com/ipfs/${imageUploadResult.cid}`,
+    showName: create.showName ?? true,
+    createdOn: create.createdOn ?? 'https://pump.fun',
+    twitter: create.twitter ?? '',
+    telegram: create.telegram ?? '',
+    website: create.website ?? '',
+  };
+
+  const metadataBuffer = Buffer.from(JSON.stringify(metadataJson), 'utf-8');
+  const metadataUploadResult = await uploadBufferToIPFS(
+    'metadata.json',
+    metadataBuffer
+  );
+
+  return `https://cf-ipfs.com/ipfs/${metadataUploadResult.cid}`;
+};

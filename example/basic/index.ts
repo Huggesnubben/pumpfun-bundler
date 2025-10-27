@@ -1,5 +1,5 @@
 import dotenv from "dotenv";
-import fs, { openAsBlob } from "fs";
+import fs from "fs";
 import {
   Connection,
   Keypair,
@@ -16,7 +16,6 @@ import {
   printSPLBalance,
 } from "../util";
 import metadata from "../../metadata";
-import { getUploadedMetadataURI } from "../../src/uploadToIpfs";
 import { bs58 } from "@coral-xyz/anchor/dist/cjs/utils/bytes";
 
 const KEYS_FOLDER = __dirname + "/.keys";
@@ -102,7 +101,7 @@ const main = async () => {
       twitter: metadata.twitter,
       telegram: metadata.telegram,
       website: metadata.website,
-      file: await openAsBlob(metadata.image),
+      metadataUri: undefined,
     };
 
     let createResults = await sdk.createAndBuy(
@@ -118,9 +117,9 @@ const main = async () => {
       }
     );
 
-    if (createResults.confirmed) {
+    if (createResults.success) {
       console.log("Success:", `https://pump.fun/${mint.publicKey.toBase58()}`);
-      console.log(createResults.jitoTxsignature);
+      console.log(createResults.signature);
       boundingCurveAccount = await sdk.getBondingCurveAccount(mint.publicKey);
       console.log("Bonding curve after create and buy", boundingCurveAccount);
       printSPLBalance(connection, mint.publicKey, testAccount.publicKey);
